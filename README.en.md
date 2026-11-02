@@ -1,12 +1,39 @@
-# Intel I225-V Ethernet workaround for macOS Tahoe
+# Intel I210 / I225 Ethernet for macOS: driver and compatibility
 
 [中文说明与完整步骤](README.md)
 
-[Download v1.0.0](https://github.com/GeekAudio/intel-i225-tahoe-fix/releases/latest) · [SHA-256 checksums](SHA256SUMS)
+[Download release](https://github.com/GeekAudio/intel-i210-i225-ethernet/releases/latest) · [SHA-256 checksums](SHA256SUMS)
 
-This repository records a working Ethernet configuration on an ASUS Z690 / Core i7-12700K / Intel I225-V (`8086:15f3`) system running macOS 26.7.1 (`25G241`, Darwin 25.6.0), with OpenCore 1.0.8.
+This repository packages the existing AppleIntelI210Ethernet 2.3.1 driver from macOS 12.6, documents its Intel I210 / I225 device matches, and provides EFI injection and verification notes. The driver itself has not been rebuilt or modified.
+
+The recorded working configuration is an ASUS Z690 / Core i7-12700K / Intel I225-V (`8086:15f3`) system running macOS 26.7.1 (`25G241`, Darwin 25.6.0), with OpenCore 1.0.8. Other matching devices remain candidates for testing.
 
 The tested combination is `AppleIntelI210Ethernet.kext 2.3.1`, a `device-id` override of `0x1533`, `built-in=01`, and the appended boot argument `e1000=0`, with AppleIGC disabled. DHCP, default routing and connectivity worked, with a negotiated **1000baseT full-duplex** link. This is not a throughput measurement or a guarantee of 2.5GbE, I226 support, or long-term sleep stability.
+
+## Device compatibility list
+
+These ten PCI IDs are taken directly from `IOPCIPrimaryMatch` / `IONameMatch` in the bundled [Info.plist](Kexts/AppleIntelI210Ethernet.kext/Contents/Info.plist). I225 family names follow the [Intel device definitions in Linux](https://github.com/torvalds/linux/blob/master/drivers/net/ethernet/intel/igc/igc_hw.h). **A match means the driver can attempt to claim a device; it does not establish functional compatibility with every macOS version.**
+
+| Device / state | PCI ID | Project validation |
+| --- | --- | --- |
+| Intel I210 | `8086:1533` | Listed in driver; untested here |
+| Intel I225-LM | `8086:15F2` | Listed in driver; untested here |
+| **Intel I225-V** | `8086:15F3` | **Recorded working: override combination below, Tahoe 26.7.1, 1000baseT full-duplex** |
+| Intel I225-K | `8086:3100` | Listed in driver; untested here |
+| Intel I225-K2 | `8086:3101` | Listed in driver; untested here |
+| Intel I225-LMVP | `8086:5502` | Listed in driver; untested here |
+| Intel I225-IT | `8086:0D9F` | Listed in driver; untested here |
+| Intel I225-I | `8086:15F8` | Listed in driver; untested here |
+| Intel I220-V | `8086:15F7` | Listed in driver; untested here |
+| I225 blank NVM state | `8086:15FD` | Special state with a match entry; not an ordinary supported-model claim |
+
+I226, I211, I219 and Realtek devices are absent from this matching table and are not established as supported by this project. Ordinary devices already listed can be tested with the unmodified driver, without adding their IDs. Verify the real PCI path, device properties and boot arguments per device; do not apply the test machine's `0x1533` override and `e1000=0` to every model automatically.
+
+Reports should include the original PCI ID, macOS build, driver loading, DHCP, negotiated link, sustained traffic and sleep/wake results. The table records driver matches separately from actual functional validation.
+
+## System and build scope
+
+Driver metadata identifies macOS 12.6 (`21G410`); the recorded working configuration uses macOS 26.7.1 (`25G241`, Darwin 25.6.0). This does not establish support for every intervening or newer release. This repository distributes an existing binary, so no particular Xcode, SDK or KDK is needed to rebuild it. The checker requires only Python 3's standard library. Empty MinKernel/MaxKernel fields do not establish compatibility with every kernel version.
 
 ## Why this exists
 
@@ -14,7 +41,9 @@ The original AppleIGC 1.9d2 configuration repeatedly hit `m->m_flags & M_PKTHDR`
 
 This is configuration-level evidence, not a source-level diagnosis of AppleIGC. A [similar upstream report](https://github.com/SongXiaoXi/AppleIGC/issues/35) provides independent context.
 
-## Installation outline
+## Installation outline for the recorded I225-V configuration
+
+The following steps, config fragment and `check_config.py` reproduce the recorded I225-V combination. The checker is not a general device compatibility detector. Other matching models need their own PCI paths and separate property/argument validation.
 
 1. Back up your complete EFI and prepare a bootable fallback. Edit a working copy first.
 2. Disable AppleIGC and any competing driver for this NIC. Copy `Kexts/AppleIntelI210Ethernet.kext` into `EFI/OC/Kexts/` and merge its `Kernel > Add` entry from `examples/config.fragment.plist`.

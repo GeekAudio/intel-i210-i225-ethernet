@@ -1,12 +1,42 @@
-# Intel I225-V · macOS Tahoe 有线网卡修复
+# Intel I210 / I225 · macOS 有线驱动与兼容性
 
 [English](README.en.md)
 
-[下载 v1.0.0 修复包](https://github.com/GeekAudio/intel-i225-tahoe-fix/releases/latest) · [文件校验清单](SHA256SUMS)
+[下载发布包](https://github.com/GeekAudio/intel-i210-i225-ethernet/releases/latest) · [文件校验清单](SHA256SUMS)
 
-在 ASUS Z690 + Intel I225-V（`8086:15f3`）上，用 `AppleIntelI210Ethernet.kext 2.3.1` 替代出现网络 panic 的 AppleIGC，恢复 macOS Tahoe 的有线连接。这里整理的是一台机器实际使用的配置与排查证据，供相同问题复现与对照。
+整理来自 macOS 12.6 的 `AppleIntelI210Ethernet.kext 2.3.1`、其 Intel I210 / I225 系列设备匹配列表，以及 EFI 注入和验证方法。本项目使用现成的 Apple 驱动包，没有重新编译或修改驱动本体。
+
+已记录的成功案例是在 ASUS Z690 + Intel I225-V（`8086:15f3`）上替代 AppleIGC，恢复 macOS Tahoe 的有线连接。其他列入匹配的设备供后续验证，不视为已经完成适配。
 
 **已实测：驱动加载、DHCP、默认路由与联网正常，链路协商为 1000baseT 全双工。** 本仓库不承诺 2.5GbE、所有 I225/I226 型号或长期睡眠稳定性。
+
+## 设备兼容列表
+
+下表逐项对应随包 [Info.plist](Kexts/AppleIntelI210Ethernet.kext/Contents/Info.plist) 中的 `IOPCIPrimaryMatch` / `IONameMatch`，共 10 个 PCI ID。I225 系列 ID 与型号名称参照 [Intel 在 Linux 内核中的设备定义](https://github.com/torvalds/linux/blob/master/drivers/net/ethernet/intel/igc/igc_hw.h)。**列入匹配表示驱动会尝试认领设备，不保证在每个 macOS 版本上都能初始化、联网或正常睡眠唤醒。**
+
+| 设备／状态 | PCI ID | 本项目验证状态 |
+| --- | --- | --- |
+| Intel I210 | `8086:1533` | 驱动已列入匹配，待实测 |
+| Intel I225-LM | `8086:15F2` | 驱动已列入匹配，待实测 |
+| **Intel I225-V** | `8086:15F3` | **已有实测记录：下述仿冒组合、Tahoe 26.7.1、千兆全双工** |
+| Intel I225-K | `8086:3100` | 驱动已列入匹配，待实测 |
+| Intel I225-K2 | `8086:3101` | 驱动已列入匹配，待实测 |
+| Intel I225-LMVP | `8086:5502` | 驱动已列入匹配，待实测 |
+| Intel I225-IT | `8086:0D9F` | 驱动已列入匹配，待实测 |
+| Intel I225-I | `8086:15F8` | 驱动已列入匹配，待实测 |
+| Intel I220-V | `8086:15F7` | 驱动已列入匹配，待实测 |
+| I225 空白 NVM 状态 | `8086:15FD` | 特殊设备状态；有匹配项，不作为普通型号的可用性承诺 |
+
+- 这份列表没有 I226、I211、I219 或 Realtek 的匹配项，不能把它们列为本项目已支持设备。
+- 已列入匹配的正常型号可先验证原驱动包，无需为增加匹配项修改驱动。具体硬件和系统上的行为仍需测试。
+- PCI 路径、是否需要 `device-id=0x1533` 仿冒及 `e1000=0` 应按设备验证；不要将本机的组合统一套用到所有型号。
+- 后续反馈应分别记录设备原始 PCI ID、macOS build、驱动加载、DHCP、链路速率、持续传输及睡眠唤醒结果。
+
+## 系统与构建范围
+
+驱动元数据为 macOS 12.6（`21G410`），本项目的成功记录覆盖 macOS 26.7.1（`25G241` / Darwin `25.6.0`）。元数据来源和实际验证范围是两回事，不能据此承诺所有中间版本或更新版本可用。
+
+本项目分发现成驱动，无需指定版本的 Xcode、SDK 或 KDK 重新编译；配置检查脚本只依赖 Python 3 标准库。示例的 `MinKernel` / `MaxKernel` 为空，不锁定某个内核版本，也不表示所有版本已验证。
 
 ## 本机验证范围
 
@@ -16,7 +46,7 @@
 | 系统 | macOS 26.7.1，build `25G241`；Darwin `25.6.0` |
 | OpenCore | 1.0.8 |
 | 替换的驱动 | `com.sxx.AppleIGC`，`CFBundleVersion=1.9d2` |
-| 当前加载 | `com.apple.driver.AppleIntelI210Ethernet`，版本 `2.3.1` |
+| 测试记录中的加载项 | `com.apple.driver.AppleIntelI210Ethernet`，版本 `2.3.1` |
 | 已测试组合 | I210 kext + `device-id=0x1533` + `built-in=01` + `e1000=0` |
 | 首次恢复 | 2026-10-21；2026-10-24 再次确认 I210 仍在加载 |
 | 链路实测 | 1000baseT，全双工，flow control；该结果不等于吞吐测速 |
@@ -48,7 +78,9 @@ dlil_create_input_thread
 
 **配置片段不能直接当完整 `config.plist` 启动，也不能覆盖整段 boot-args。** PCI 路径是本机的示例，必须改成你自己的有线网卡路径。
 
-## 安装
+## 本机 I225-V 安装参考
+
+**以下步骤、配置片段和 `check_config.py` 用于复现上述 I225-V 测试组合。** 校验脚本不是通用设备兼容检测器；其他匹配型号应使用自己的 PCI 路径，并单独验证设备属性和参数。
 
 ### 1. 保存可回退的 EFI
 
