@@ -31,8 +31,6 @@ I226, I211, I219 and Realtek devices are absent from this matching table and are
 
 Reports should include the original PCI ID, macOS build, driver loading, DHCP, negotiated link, sustained traffic and sleep/wake results. The table records driver matches separately from actual functional validation.
 
-CPU-platform validation currently covers only Intel Core i7-12700K. AMD CPU platforms have not been tested here; a matching NIC ID does not establish validation on another CPU platform.
-
 ## System and build scope
 
 Driver metadata identifies macOS 12.6 (`21G410`); the recorded working configuration uses macOS 26.7.1 (`25G241`, Darwin 25.6.0). This does not establish support for every intervening or newer release. This repository distributes an existing binary, so no particular Xcode, SDK or KDK is needed to rebuild it. The checker requires only Python 3's standard library. Empty MinKernel/MaxKernel fields do not establish compatibility with every kernel version.
